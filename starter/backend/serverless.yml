@@ -7,53 +7,172 @@ frameworkVersion: '3'
 
 provider:
   name: aws
-  runtime: nodejs14.x
+  runtime: nodejs18.x
+  stage: dev
+  region: us-east-1
+  environment:
+    TODOS_TABLE: Todos
+    ATTACHMENTS_BUCKET: serverless-todo-attachments-${aws:accountId}
+    SIGNED_URL_EXPIRATION: 300
 
 functions:
-
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
-  # TODO: Configure this function
   GetTodos:
     handler: src/lambda/http/getTodos.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
     events:
       - http:
           method: get
           path: todos
+          cors: true
+          authorizer: Auth
 
-  # TODO: Configure this function
+  GetTodo:
+    handler: src/lambda/http/getTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
+    events:
+      - http:
+          method: get
+          path: todos/{todoId}
+          cors: true
+          authorizer: Auth
+
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
     events:
       - http:
           method: post
           path: todos
+          cors: true
+          authorizer: Auth
 
-  # TODO: Configure this function
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
     events:
       - http:
           method: patch
           path: todos/{todoId}
+          cors: true
+          authorizer: Auth
 
-  # TODO: Configure this function
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
     events:
       - http:
           method: delete
           path: todos/{todoId}
+          cors: true
+          authorizer: Auth
 
-  # TODO: Configure this function
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:GetObject
+        Resource:
+          - Fn::Join:
+              - ''
+              - - Fn::GetAtt: [AttachmentsBucket, Arn]
+                - '/*'
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
     events:
       - http:
           method: post
           path: todos/{todoId}/attachment
+          cors: true
+          authorizer: Auth
+
+  GetAttachmentUrl:
+    handler: src/lambda/http/getAttachmentUrl.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:GetObject
+        Resource:
+          - Fn::Join:
+              - ''
+              - - Fn::GetAtt: [AttachmentsBucket, Arn]
+                - '/*'
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource:
+          - Fn::GetAtt: [TodosTable, Arn]
+    events:
+      - http:
+          method: get
+          path: todos/{todoId}/attachment
+          cors: true
+          authorizer: Auth
 
 resources:
   Resources:
-    # TODO: Add any necessary AWS resources
+    TodosTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Todos
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: todoId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: todoId
+            KeyType: RANGE
+
+    AttachmentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: serverless-todo-attachments-${aws:accountId}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              AllowedHeaders:
+                - '*'
+              MaxAge: 3000

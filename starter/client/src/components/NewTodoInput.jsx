@@ -11,15 +11,22 @@ export function NewTodoInput({ onNewTodo }) {
 
   const onTodoCreate = async (event) => {
     try {
+      const trimmedName = newTodoName.trim()
+      if (!trimmedName) {
+        alert('Title cannot be empty')
+        return
+      }
+
       const accessToken = await getAccessTokenSilently({
-        audience: `https://test-endpoint.auth0.com/api/v2/`,
+        audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
         scope: 'write:todos'
       })
       const dueDate = calculateDueDate()
       const createdTodo = await createTodo(accessToken, {
-        name: newTodoName,
+        name: trimmedName,
         dueDate
       })
+      setNewTodoName('')
       onNewTodo(createdTodo)
     } catch (e) {
       console.log('Failed to created a new TODO', e)
@@ -41,6 +48,7 @@ export function NewTodoInput({ onNewTodo }) {
           fluid
           actionPosition="left"
           placeholder="To change the world..."
+          value={newTodoName}
           onChange={(event) => setNewTodoName(event.target.value)}
         />
       </Grid.Column>

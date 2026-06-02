@@ -1,11 +1,11 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetCommand } from '@aws-sdk/lib-dynamodb'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { db, todosTable } from '../../dataLayer/dynamoDb.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
 
-const s3Client = new S3Client({})
 const bucketName = process.env.ATTACHMENTS_BUCKET
+const s3Client = new S3Client({})
 const urlExpiration = Number(process.env.SIGNED_URL_EXPIRATION || 300)
 
 export async function handler(event) {
@@ -15,34 +15,34 @@ export async function handler(event) {
       event.headers.Authorization || event.headers.authorization
     )
 
-    const { fileType } = JSON.parse(event.body || '{}')
-
-    const putCommand = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: todoId,
-      ...(fileType ? { ContentType: fileType } : {})
-    })
-
-    const uploadUrl = await getSignedUrl(
-      s3Client,
-      putCommand,
-      { expiresIn: urlExpiration }
-    )
-
-    const attachmentUrl = `https://${bucketName}.s3.amazonaws.com/${todoId}`
-
-    await db.send(
-      new UpdateCommand({
+    const result = await db.send(
+      new GetCommand({
         TableName: todosTable,
         Key: {
           userId,
           todoId
-        },
-        UpdateExpression: 'set attachmentUrl = :attachmentUrl',
-        ExpressionAttributeValues: {
-          ':attachmentUrl': attachmentUrl
         }
       })
+    )
+
+    if (!result.Item || !result.Item.attachmentUrl) {
+      return {
+        statusCode: 404,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Credentials': true
+        },
+        body: JSON.stringify({ error: 'Attachment not found' })
+      }
+    }
+
+    const attachmentUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({
+        Bucket: bucketName,
+        Key: todoId
+      }),
+      { expiresIn: urlExpiration }
     )
 
     return {
@@ -51,9 +51,7 @@ export async function handler(event) {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Credentials': true
       },
-      body: JSON.stringify({
-        uploadUrl
-      })
+      body: JSON.stringify({ attachmentUrl })
     }
   } catch (error) {
     return {
@@ -62,9 +60,7 @@ export async function handler(event) {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Credentials': true
       },
-      body: JSON.stringify({
-        error: error.message
-      })
+      body: JSON.stringify({ error: error.message })
     }
   }
 }

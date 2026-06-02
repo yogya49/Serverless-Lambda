@@ -1,8 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react'
-import React, { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Button, Form } from 'semantic-ui-react'
-import { getUploadUrl, uploadFile } from '../api/todos-api'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Button, Form, Input } from 'semantic-ui-react'
+import { getAttachmentUrl, getTodo, getUploadUrl, patchTodo, uploadFile } from '../api/todos-api'
 
 const UploadState = {
   NoUpload: 'NoUpload',
@@ -11,15 +11,41 @@ const UploadState = {
 }
 
 export function EditTodo() {
+  const [todo, setTodo] = useState(null)
+  const [title, setTitle] = useState('')
+  const [file, setFile] = useState(undefined)
+  const [uploadState, setUploadState] = useState(UploadState.NoUpload)
+  const { getAccessTokenSilently } = useAuth0()
+  const { todoId } = useParams()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    async function loadTodo() {
+      try {
+        const accessToken = await getAccessTokenSilently({
+          audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
+          scope: 'read:todos'
+        })
+        const loadedTodo = await getTodo(accessToken, todoId)
+        setTodo(loadedTodo)
+        setTitle(loadedTodo.name)
+      } catch (e) {
+        alert('Could not load todo: ' + e.message)
+      }
+    }
+
+    loadTodo()
+  }, [getAccessTokenSilently, todoId])
+
   function renderButton() {
     return (
       <div>
         {uploadState === UploadState.FetchingPresignedUrl && (
-          <p>Uploading image metadata</p>
+          <p>Preparing attachment upload</p>
         )}
         {uploadState === UploadState.UploadingFile && <p>Uploading file</p>}
-        <Button loading={uploadState !== UploadState.NoUpload} type="submit">
-          Upload
+        <Button loading={uploadState !== UploadState.NoUpload} type="submit" color="teal">
+          Save changes
         </Button>
       </div>
     )
@@ -35,48 +61,85 @@ export function EditTodo() {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    try {
-      if (!file) {
-        alert('File should be selected')
-        return
-      }
+    if (!title.trim()) {
+      alert('Title cannot be empty')
+      return
+    }
 
-      setUploadState(UploadState.FetchingPresignedUrl)
+    try {
       const accessToken = await getAccessTokenSilently({
-        audience: `https://test-endpoint.auth0.com/api/v2/`,
+        audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
         scope: 'write:todos'
       })
-      const uploadUrl = await getUploadUrl(accessToken, todoId)
 
-      setUploadState(UploadState.UploadingFile)
-      await uploadFile(uploadUrl, file)
+      await patchTodo(accessToken, todoId, {
+        name: title.trim(),
+        dueDate: todo.dueDate,
+        done: todo.done
+      })
 
-      alert('File was uploaded!')
+      if (file) {
+        setUploadState(UploadState.FetchingPresignedUrl)
+        const uploadUrl = await getUploadUrl(accessToken, todoId, file.type)
+
+        setUploadState(UploadState.UploadingFile)
+        await uploadFile(uploadUrl, file)
+      }
+
+      alert('Todo updated successfully')
+      navigate('/')
     } catch (e) {
-      alert('Could not upload a file: ' + e.message)
+      alert('Could not update todo: ' + e.message)
     } finally {
       setUploadState(UploadState.NoUpload)
     }
   }
 
-  const [file, setFile] = useState(undefined)
-  const [uploadState, setUploadState] = useState(UploadState.NoUpload)
-  const { getAccessTokenSilently } = useAuth0()
-  const { todoId } = useParams()
+  if (!todo) {
+    return <p>Loading todo...</p>
+  }
 
   return (
     <div>
-      <h1>Upload new image</h1>
+      <h1>Edit TODO</h1>
 
       <Form onSubmit={handleSubmit}>
         <Form.Field>
-          <label>File</label>
-          <input
-            type="file"
-            accept="image/*"
-            placeholder="Image to upload"
-            onChange={handleFileChange}
+          <label>Title</label>
+          <Input
+            placeholder="Todo title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
           />
+        </Form.Field>
+
+        {todo.attachmentUrl && (
+          <Form.Field>
+            <label>Current attachment</label>
+            <Button
+              type="button"
+              color="blue"
+              onClick={async () => {
+                try {
+                  const accessToken = await getAccessTokenSilently({
+                    audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
+                    scope: 'read:todos'
+                  })
+                  const url = await getAttachmentUrl(accessToken, todoId)
+                  window.open(url, '_blank', 'noopener')
+                } catch (e) {
+                  alert('Could not open attachment: ' + e.message)
+                }
+              }}
+            >
+              View current file
+            </Button>
+          </Form.Field>
+        )}
+
+        <Form.Field>
+          <label>Replace attachment</label>
+          <input type="file" onChange={handleFileChange} />
         </Form.Field>
 
         {renderButton()}

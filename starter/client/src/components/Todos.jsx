@@ -7,13 +7,12 @@ import {
   Grid,
   Header,
   Icon,
-  Image,
   Loader
 } from 'semantic-ui-react'
 
 import { useAuth0 } from '@auth0/auth0-react'
 import { useNavigate } from 'react-router-dom'
-import { deleteTodo, getTodos, patchTodo } from '../api/todos-api'
+import { deleteTodo, getAttachmentUrl, getTodos, patchTodo } from '../api/todos-api'
 import { NewTodoInput } from './NewTodoInput'
 
 export function Todos() {
@@ -62,7 +61,25 @@ export function Todos() {
                 </Button>
               </Grid.Column>
               {todo.attachmentUrl && (
-                <Image src={todo.attachmentUrl} size="small" wrapped />
+                <Grid.Column width={16}>
+                  <Button
+                    color="blue"
+                    onClick={async () => {
+                      try {
+                        const accessToken = await getAccessTokenSilently({
+                          audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
+                          scope: 'read:todos'
+                        })
+                        const url = await getAttachmentUrl(accessToken, todo.todoId)
+                        window.open(url, '_blank', 'noopener')
+                      } catch (e) {
+                        alert('Could not open attachment: ' + e.message)
+                      }
+                    }}
+                  >
+                    View attachment
+                  </Button>
+                </Grid.Column>
               )}
               <Grid.Column width={16}>
                 <Divider />
@@ -77,7 +94,7 @@ export function Todos() {
   async function onTodoDelete(todoId) {
     try {
       const accessToken = await getAccessTokenSilently({
-        audience: `https://test-endpoint.auth0.com/api/v2/`,
+        audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/' ,
         scope: 'delete:todo'
       })
       await deleteTodo(accessToken, todoId)
@@ -91,7 +108,7 @@ export function Todos() {
     try {
       const todo = todos[pos]
       const accessToken = await getAccessTokenSilently({
-        audience: `https://test-endpoint.auth0.com/api/v2/`,
+        audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
         scope: 'write:todo'
       })
       await patchTodo(accessToken, todo.todoId, {
@@ -128,7 +145,7 @@ export function Todos() {
     async function foo() {
       try {
         const accessToken = await getAccessTokenSilently({
-          audience: `https://test-endpoint.auth0.com/api/v2/`,
+          audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
           scope: 'read:todos'
         })
         console.log('Access token: ' + accessToken)
