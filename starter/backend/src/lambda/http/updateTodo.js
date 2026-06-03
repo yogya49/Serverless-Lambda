@@ -1,53 +1,53 @@
-import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { db, todosTable } from '../../dataLayer/dynamoDb.mjs'
+﻿import { updateTodo, ValidationError } from '../../services/todosService.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
-import { createLogger } from '../../utils/logger.mjs'
-import { annotateTrace } from '../../utils/xray.mjs'
-
-const logger = createLogger('updateTodo')
 
 export async function handler(event) {
-  const todoId = event.pathParameters.todoId
-  const updatedTodo = JSON.parse(event.body)
-  const userId = parseUserId(event.headers.Authorization || event.headers.authorization)
-  annotateTrace({ operation: 'UpdateTodo', userId, todoId })
-  logger.info('Updating todo', { userId, todoId })
+  try {
+    const todoId = event.pathParameters.todoId
+    let updatedTodo
+    try {
+      updatedTodo = JSON.parse(event.body)
+    } catch (parseError) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Credentials': true
+        },
+        body: JSON.stringify({ error: 'Invalid JSON request body' })
+      }
+    }
+    const userId = parseUserId(event.headers.Authorization || event.headers.authorization)
 
-  const trimmedName = updatedTodo.name?.trim()
-  if (!trimmedName) {
+    await updateTodo(userId, todoId, updatedTodo)
+
     return {
-      statusCode: 400,
+      statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Credentials': true
       },
-      body: JSON.stringify({ error: 'Todo title is required' })
+      body: JSON.stringify({})
     }
-  }
-
-  await db.send(new UpdateCommand({
-    TableName: todosTable,
-    Key: {
-      userId,
-      todoId
-    },
-    UpdateExpression: 'set #name = :name, dueDate = :dueDate, done = :done',
-    ExpressionAttributeNames: {
-      '#name': 'name'
-    },
-    ExpressionAttributeValues: {
-      ':name': trimmedName,
-      ':dueDate': updatedTodo.dueDate,
-      ':done': updatedTodo.done
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Credentials': true
+        },
+        body: JSON.stringify({ error: error.message })
+      }
     }
-  }))
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': true
-    },
-    body: JSON.stringify({})
+    return {
+      statusCode: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true
+      },
+      body: JSON.stringify({ error: error.message })
+    }
   }
 }
