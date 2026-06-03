@@ -3,6 +3,7 @@ import dateFormat from 'dateformat'
 import React, { useState } from 'react'
 import { Divider, Grid, Input } from 'semantic-ui-react'
 import { createTodo } from '../api/todos-api'
+import { auth0Scopes, getTokenOptions } from '../authConfig'
 
 export function NewTodoInput({ onNewTodo }) {
   const [newTodoName, setNewTodoName] = useState('')
@@ -17,10 +18,9 @@ export function NewTodoInput({ onNewTodo }) {
         return
       }
 
-      const accessToken = await getAccessTokenSilently({
-        audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-        scope: 'write:todos'
-      })
+      const accessToken = await getAccessTokenSilently(
+        getTokenOptions(auth0Scopes.write)
+      )
       const dueDate = calculateDueDate()
       const createdTodo = await createTodo(accessToken, {
         name: trimmedName,

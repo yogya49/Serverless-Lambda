@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Form, Input } from 'semantic-ui-react'
 import { getAttachmentUrl, getTodo, getUploadUrl, patchTodo, uploadFile } from '../api/todos-api'
+import { auth0Scopes, getTokenOptions } from '../authConfig'
 
 const UploadState = {
   NoUpload: 'NoUpload',
@@ -15,17 +16,20 @@ export function EditTodo() {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState(undefined)
   const [uploadState, setUploadState] = useState(UploadState.NoUpload)
-  const { getAccessTokenSilently } = useAuth0()
+  const { getAccessTokenSilently, isAuthenticated, isLoading } = useAuth0()
   const { todoId } = useParams()
   const navigate = useNavigate()
 
   useEffect(() => {
+    if (isLoading || !isAuthenticated) {
+      return
+    }
+
     async function loadTodo() {
       try {
-        const accessToken = await getAccessTokenSilently({
-          audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-          scope: 'read:todos'
-        })
+        const accessToken = await getAccessTokenSilently(
+          getTokenOptions(auth0Scopes.read)
+        )
         const loadedTodo = await getTodo(accessToken, todoId)
         setTodo(loadedTodo)
         setTitle(loadedTodo.name)
@@ -35,7 +39,7 @@ export function EditTodo() {
     }
 
     loadTodo()
-  }, [getAccessTokenSilently, todoId])
+  }, [getAccessTokenSilently, todoId, isAuthenticated, isLoading])
 
   function renderButton() {
     return (
@@ -67,10 +71,9 @@ export function EditTodo() {
     }
 
     try {
-      const accessToken = await getAccessTokenSilently({
-        audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-        scope: 'write:todos'
-      })
+      const accessToken = await getAccessTokenSilently(
+        getTokenOptions(auth0Scopes.write)
+      )
 
       await patchTodo(accessToken, todoId, {
         name: title.trim(),
@@ -121,10 +124,9 @@ export function EditTodo() {
               color="blue"
               onClick={async () => {
                 try {
-                  const accessToken = await getAccessTokenSilently({
-                    audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-                    scope: 'read:todos'
-                  })
+                  const accessToken = await getAccessTokenSilently(
+                    getTokenOptions(auth0Scopes.read)
+                  )
                   const url = await getAttachmentUrl(accessToken, todoId)
                   window.open(url, '_blank', 'noopener')
                 } catch (e) {
