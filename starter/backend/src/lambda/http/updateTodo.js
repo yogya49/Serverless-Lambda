@@ -1,11 +1,17 @@
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { db, todosTable } from '../../dataLayer/dynamoDb.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
+import { createLogger } from '../../utils/logger.mjs'
+import { annotateTrace } from '../../utils/xray.mjs'
+
+const logger = createLogger('updateTodo')
 
 export async function handler(event) {
   const todoId = event.pathParameters.todoId
   const updatedTodo = JSON.parse(event.body)
   const userId = parseUserId(event.headers.Authorization || event.headers.authorization)
+  annotateTrace({ operation: 'UpdateTodo', userId, todoId })
+  logger.info('Updating todo', { userId, todoId })
 
   const trimmedName = updatedTodo.name?.trim()
   if (!trimmedName) {

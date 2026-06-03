@@ -3,9 +3,11 @@ import { GetCommand } from '@aws-sdk/lib-dynamodb'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { db, todosTable } from '../../dataLayer/dynamoDb.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
+import { createLogger } from '../../utils/logger.mjs'
+import { captureAWSClient, annotateTrace } from '../../utils/xray.mjs'
 
 const bucketName = process.env.ATTACHMENTS_BUCKET
-const s3Client = new S3Client({})
+const s3Client = captureAWSClient(new S3Client({}))
 const urlExpiration = Number(process.env.SIGNED_URL_EXPIRATION || 300)
 
 export async function handler(event) {
@@ -14,6 +16,8 @@ export async function handler(event) {
     const userId = parseUserId(
       event.headers.Authorization || event.headers.authorization
     )
+    annotateTrace({ operation: 'GetAttachmentUrl', userId, todoId })
+    logger.info('Retrieving attachment URL', { userId, todoId })
 
     const result = await db.send(
       new GetCommand({

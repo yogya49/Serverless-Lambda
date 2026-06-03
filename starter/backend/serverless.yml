@@ -10,6 +10,15 @@ provider:
   runtime: nodejs18.x
   stage: dev
   region: us-east-1
+  tracing:
+    lambda: true
+    apiGateway: true
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - xray:PutTraceSegments
+        - xray:PutTelemetryRecords
+      Resource: '*'
   environment:
     TODOS_TABLE: Todos
     ATTACHMENTS_BUCKET: serverless-todo-attachments-${aws:accountId}

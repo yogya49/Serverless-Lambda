@@ -1,6 +1,7 @@
 import Axios from 'axios'
 import jsonwebtoken from 'jsonwebtoken'
 import { createLogger } from '../../utils/logger.mjs'
+import { annotateTrace } from '../../utils/xray.mjs'
 
 const logger = createLogger('auth')
 
@@ -25,6 +26,7 @@ export async function handler(event) {
       }
     }
   } catch (e) {
+    annotateTrace({ operation: 'Auth0Authorizer', error: e.message })
     logger.error('User not authorized', { error: e.message })
 
     return {
