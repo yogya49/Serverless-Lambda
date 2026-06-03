@@ -12,7 +12,13 @@ import {
 
 import { useAuth0 } from '@auth0/auth0-react'
 import { useNavigate } from 'react-router-dom'
-import { deleteTodo, getAttachmentUrl, getTodos, patchTodo } from '../api/todos-api'
+import {
+  deleteTodo,
+  getAttachmentUrl,
+  getTodos,
+  patchTodo
+} from '../api/todos-api'
+import { auth0Scopes, getTokenOptions } from '../authConfig'
 import { NewTodoInput } from './NewTodoInput'
 
 export function Todos() {
@@ -66,11 +72,13 @@ export function Todos() {
                     color="blue"
                     onClick={async () => {
                       try {
-                        const accessToken = await getAccessTokenSilently({
-                          audience: 'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-                          scope: 'read:todos'
-                        })
-                        const url = await getAttachmentUrl(accessToken, todo.todoId)
+                        const accessToken = await getAccessTokenSilently(
+                          getTokenOptions(auth0Scopes.read)
+                        )
+                        const url = await getAttachmentUrl(
+                          accessToken,
+                          todo.todoId
+                        )
                         window.open(url, '_blank', 'noopener')
                       } catch (e) {
                         alert('Could not open attachment: ' + e.message)
@@ -93,10 +101,9 @@ export function Todos() {
 
   async function onTodoDelete(todoId) {
     try {
-      const accessToken = await getAccessTokenSilently({
-        audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/' ,
-        scope: 'delete:todo'
-      })
+      const accessToken = await getAccessTokenSilently(
+        getTokenOptions(auth0Scopes.delete)
+      )
       await deleteTodo(accessToken, todoId)
       setTodos(todos.filter((todo) => todo.todoId !== todoId))
     } catch (e) {
@@ -107,10 +114,9 @@ export function Todos() {
   async function onTodoCheck(pos) {
     try {
       const todo = todos[pos]
-      const accessToken = await getAccessTokenSilently({
-        audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-        scope: 'write:todo'
-      })
+      const accessToken = await getAccessTokenSilently(
+        getTokenOptions(auth0Scopes.write)
+      )
       await patchTodo(accessToken, todo.todoId, {
         name: todo.name,
         dueDate: todo.dueDate,
@@ -131,33 +137,33 @@ export function Todos() {
     navigate(`/todos/${todoId}/edit`)
   }
 
-  const { user, getAccessTokenSilently } = useAuth0()
+  const { getAccessTokenSilently, isAuthenticated, isLoading } = useAuth0()
   const [todos, setTodos] = useState([])
   const [loadingTodos, setLoadingTodos] = useState(true)
   const navigate = useNavigate()
 
-  console.log('User', {
-    name: user.name,
-    email: user.email
-  })
-
   useEffect(() => {
-    async function foo() {
+    if (isLoading || !isAuthenticated) {
+      return
+    }
+
+    async function fetchTodos() {
       try {
-        const accessToken = await getAccessTokenSilently({
-          audience:  'https://dev-n1jc202horh4e1m6.us.auth0.com/api/v2/',
-          scope: 'read:todos'
-        })
-        console.log('Access token: ' + accessToken)
+        const accessToken = await getAccessTokenSilently(
+          getTokenOptions(auth0Scopes.read)
+        )
         const todos = await getTodos(accessToken)
         setTodos(todos)
-        setLoadingTodos(false)
       } catch (e) {
+        console.log('Error getting todos', e)
         alert(`Failed to fetch todos: ${e.message}`)
+      } finally {
+        setLoadingTodos(false)
       }
     }
-    foo()
-  }, [getAccessTokenSilently])
+
+    fetchTodos()
+  }, [getAccessTokenSilently, isAuthenticated, isLoading])
 
   return (
     <div>

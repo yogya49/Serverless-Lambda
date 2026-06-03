@@ -1,7 +1,7 @@
 import { useAuth0 } from '@auth0/auth0-react'
 import React from 'react'
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
-import { Grid, Menu, Segment } from 'semantic-ui-react'
+import { Dimmer, Grid, Loader, Menu, Segment } from 'semantic-ui-react'
 
 import { EditTodo } from './components/EditTodo'
 import { LogIn } from './components/LogIn'
@@ -38,6 +38,14 @@ export default function App() {
   }
 
   const { isAuthenticated, isLoading, loginWithRedirect, logout } = useAuth0()
+
+  if (isLoading) {
+    return (
+      <Dimmer active page>
+        <Loader size="large">Loading...</Loader>
+      </Dimmer>
+    )
+  }
 
   return (
     <div>
