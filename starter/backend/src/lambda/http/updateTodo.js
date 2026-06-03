@@ -1,5 +1,6 @@
 ﻿import { updateTodo, ValidationError } from '../../services/todosService.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
+import { annotateTrace, addMetadataToSegment, addErrorToSegment } from '../../utils/xray.mjs'
 
 export async function handler(event) {
   try {
@@ -8,6 +9,7 @@ export async function handler(event) {
     try {
       updatedTodo = JSON.parse(event.body)
     } catch (parseError) {
+      addErrorToSegment(parseError)
       return {
         statusCode: 400,
         headers: {
@@ -19,7 +21,27 @@ export async function handler(event) {
     }
     const userId = parseUserId(event.headers.Authorization || event.headers.authorization)
 
+    // Add X-Ray annotations
+    annotateTrace({
+      handler: 'updateTodo',
+      method: event.httpMethod,
+      path: event.path,
+      userId,
+      todoId
+    })
+    addMetadataToSegment('request', {
+      httpMethod: event.httpMethod,
+      path: event.path,
+      todoId,
+      updateFields: Object.keys(updatedTodo)
+    })
+
     await updateTodo(userId, todoId, updatedTodo)
+
+    addMetadataToSegment('response', {
+      statusCode: 200,
+      updated: true
+    })
 
     return {
       statusCode: 200,
@@ -31,6 +53,7 @@ export async function handler(event) {
     }
   } catch (error) {
     if (error instanceof ValidationError) {
+      addErrorToSegment(error)
       return {
         statusCode: 400,
         headers: {
@@ -41,6 +64,7 @@ export async function handler(event) {
       }
     }
 
+    addErrorToSegment(error)
     return {
       statusCode: 500,
       headers: {

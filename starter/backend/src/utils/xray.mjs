@@ -17,3 +17,37 @@ export function annotateTrace(metadata = {}) {
     }
   })
 }
+
+export function addMetadataToSegment(namespace, metadata = {}) {
+  const segment = AWSXRay.getSegment()
+  if (!segment) return
+
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (value !== undefined) {
+      segment.addMetadata(key, value, namespace)
+    }
+  })
+}
+
+export function addErrorToSegment(error) {
+  const segment = AWSXRay.getSegment()
+  if (!segment) return
+
+  if (error instanceof Error) {
+    segment.addError(error)
+    segment.addAnnotation('error', String(error.message))
+  }
+}
+
+export function createSubsegment(name) {
+  const segment = AWSXRay.getSegment()
+  if (!segment) return null
+
+  return segment.addNewSubsegment(name)
+}
+
+export function closeSubsegment(subsegment) {
+  if (subsegment && !subsegment.isClosed()) {
+    subsegment.close()
+  }
+}

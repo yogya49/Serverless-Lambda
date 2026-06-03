@@ -1,5 +1,6 @@
 ﻿import { generateUploadUrl, ValidationError } from '../../services/todosService.mjs'
 import { parseUserId } from '../../auth/utils.mjs'
+import { annotateTrace, addMetadataToSegment, addErrorToSegment } from '../../utils/xray.mjs'
 
 export async function handler(event) {
   try {
@@ -9,6 +10,7 @@ export async function handler(event) {
     try {
       requestBody = JSON.parse(event.body || '{}')
     } catch (parseError) {
+      addErrorToSegment(parseError)
       return {
         statusCode: 400,
         headers: {
@@ -18,7 +20,29 @@ export async function handler(event) {
         body: JSON.stringify({ error: 'Invalid JSON request body' })
       }
     }
+
+    // Add X-Ray annotations
+    annotateTrace({
+      handler: 'generateUploadUrl',
+      method: event.httpMethod,
+      path: event.path,
+      userId,
+      todoId,
+      fileType: requestBody.fileType
+    })
+    addMetadataToSegment('request', {
+      httpMethod: event.httpMethod,
+      path: event.path,
+      todoId,
+      fileType: requestBody.fileType
+    })
+
     const result = await generateUploadUrl(userId, todoId, requestBody)
+
+    addMetadataToSegment('response', {
+      statusCode: 200,
+      urlGenerated: true
+    })
 
     return {
       statusCode: 200,
@@ -30,6 +54,7 @@ export async function handler(event) {
     }
   } catch (error) {
     if (error instanceof ValidationError) {
+      addErrorToSegment(error)
       return {
         statusCode: 400,
         headers: {
@@ -40,6 +65,7 @@ export async function handler(event) {
       }
     }
 
+    addErrorToSegment(error)
     return {
       statusCode: 500,
       headers: {
